@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS自動投稿スクリプト利用ガイド</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #0056b3;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        h2 {
+            font-size: 1.5em;
+        }
+        h3 {
+            font-size: 1.2em;
+        }
+        p {
+            margin-bottom: 15px;
+        }
+        code {
+            background-color: #e9e9e9;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #c7254e;
+        }
+        pre {
+            background-color: #e9e9e9;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        strong {
+            color: #0056b3;
+        }
+        .note {
+            background-color: #e6f7ff;
+            border-left: 5px solid #3399ff;
+            padding: 10px 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .step-number {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #28a745;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OBS自動投稿スクリプト利用ガイド</h1>
+        <p>このガイドでは、OBS Studioで配信を開始した際に、X (旧Twitter)、Bluesky、Discordに自動的に通知を投稿するためのPythonスクリプト「OBS Auto Post」の設定方法を説明します。</p>
+
+        <h2><span class="step-number">①</span> Python 3.10.11のインストール (Windows 64bit版)</h2>
+        <p>まず、スクリプトを実行するために<strong>Python 3.10.11 (Windows 64bit版)</strong>をインストールします。以下の手順に従ってください。</p>
+        <ol>
+            <li>Python公式サイト (<a href="https://www.python.org/downloads/windows/" target="_blank">https://www.python.org/downloads/windows/</a>) から「Python 3.10.11 Windows installer (64-bit)」をダウンロードし、実行します。</li>
+            <li>インストーラーの最初の画面で、<strong>「Add Python 3.10 to PATH」に必ずチェックを入れてください。</strong> これにより、コマンドプロンプトからPythonを実行できるようになります。</li>
+            <li>「Install Now」をクリックし、インストールを完了させます。</li>
+            <li>インストール後、コマンドプロンプトを開き、以下のコマンドを入力してPythonが正しくインストールされたか確認します。</li>
+        </ol>
+        <pre><code>python --version</code></pre>
+        <p>バージョンが「Python 3.10.11」と表示されれば成功です。</p>
+        <hr>
+
+        <h2><span class="step-number">②</span> 必要なPythonライブラリのインストール</h2>
+        <p>次に、スクリプトが依存するPythonライブラリをインストールします。コマンドプロンプトを開き、以下のコマンドを<strong>1つずつ</strong>入力して実行してください。</p>
+        <pre><code>python -m pip install --upgrade pip
+pip install tweepy
+pip install atproto
+pip install -U requests</code></pre>
+        <div class="note">
+            <p><strong>注意:</strong> これらのコマンドは、インターネット接続が必要です。</p>
+        </div>
+        <hr>
+
+        <h2><span class="step-number">③</span> OBSのPythonフォルダパスの設定</h2>
+        <p>OBS StudioにPythonのパスを認識させる必要があります。以下の手順を実行します。</p>
+        <ol>
+            <li>OBS Studioを開きます。</li>
+            <li>メニューバーから<strong>「ツール」</strong>→<strong>「スクリプト」</strong>を選択します。</li>
+            <li>スクリプトウィンドウ下部にある<strong>「Python Path」</strong>の欄に、Python 3.10.11がインストールされているフォルダのパスを入力します。通常、以下のパスになります。</li>
+        </ol>
+        <pre><code>%USERPROFILE%\AppData\Local\Programs\Python\Python310</code></pre>
+        <p>このパスは、エクスプローラーのアドレスバーに直接入力して開くことができます。</p>
+        <hr>
+
+        <h2><span class="step-number">④</span> OBSの再起動</h2>
+        <p>Pythonパスの設定を反映させるため、OBS Studioを一度完全に終了し、再起動してください。</p>
+        <hr>
+
+        <h2><span class="step-number">⑤</span> スクリプトファイルの配置とOBSへの登録</h2>
+        <p>提供されたPythonスクリプトファイルをOBS Studioに登録します。</p>
+        <ol>
+            <li>提供された<code>OBS_Auto_Post.py</code>と<code>get_twitch_info.py</code>の<strong>2つのファイル</strong>を、任意の同じフォルダに配置します。例えば、デスクトップ上に新しいフォルダを作成してその中に入れるなど。</li>
+            <li>OBS Studioを起動し、再び<strong>「ツール」</strong>→<strong>「スクリプト」</strong>を開きます。</li>
+            <li>スクリプトウィンドウの左下にある<strong>「+」</strong>ボタンをクリックし、先ほど配置した<code>OBS_Auto_Post.py</code>ファイルを選択して追加します。</li>
+        </ol>
+        <hr>
+
+        <h2><span class="step-number">⑥</span> 各種サービスAPI情報の入力</h2>
+        <p>OBSのスクリプト設定画面で、各サービスのAPI情報を入力します。各サービスのアカウントを事前に準備してください。</p>
+
+        <h3>Twitch API設定</h3>
+        <p>Twitch DeveloperサイトでクライアントIDとクライアントシークレットを取得し、OBSのスクリプト設定に入力します。</p>
+        <ol>
+            <li><a href="https://dev.twitch.tv/" target="_blank">Twitch Developerサイト</a>にログインします。</li>
+            <li>ダッシュボードから<strong>「Applications」</strong>に移動し、<strong>「Register Your Application」</strong>をクリックします。</li>
+            <li>アプリケーション登録画面で、以下の情報を入力します。
+                <ul>
+                    <li><strong>Name:</strong> アプリケーションの名前 (例: OBS Auto Post)</li>
+                    <li><strong>OAuth Redirect URLs:</strong> <code>https://api.twitch.tv/kraken/oauth2/authorize</code> </li>
+                    <li><strong>Category:</strong> アプリケーションのカテゴリを選択 (例: Broadcasting Tools)</li>
+                </ul>
+            </li>
+            <li><strong>「Create」</strong>をクリックしてアプリケーションを作成します。</li>
+            <li>作成されたアプリケーションの詳細画面で、<strong>「Client ID」</strong>が表示されます。また、<strong>「New Secret」</strong>をクリックすると<strong>Client Secret</strong>が生成されます。これらを控えておきます。</li>
+            <li>OBS Studioのスクリプト設定画面で、以下の情報を入力します。
+                <ul>
+                    <li><strong>Twitch Account ID:</strong> あなたのTwitchユーザー名</li>
+                    <li><strong>Twitch Client ID:</strong> 取得したClient ID</li>
+                    <li><strong>Twitch Client Secret:</strong> 取得したClient Secret</li>
+                </ul>
+            </li>
+        </ol>
+        <h3>X (旧Twitter) API設定</h3>
+        <p>X DeveloperサイトでAPIキーなどを取得し、OBSのスクリプト設定に入力します。X APIの利用には、開発者アカウントの申請とプロジェクト・アプリの作成が必要です。</p>
+        <ol>
+            <li><a href="https://developer.twitter.com/en/portal/dashboard" target="_blank">X Developer Portal</a>にログインします。開発者アカウントをお持ちでない場合は、申請プロセスを完了させてください。</li>
+            <li>ダッシュボードで<strong>「Projects & Apps」</strong>セクションに移動し、<strong>「+ New Project」</strong>をクリックして新しいプロジェクトを作成します。</li>
+            <li>プロジェクト作成後、そのプロジェクト内で新しいアプリケーション (App) を作成します。<strong>「Add App」</strong>または<strong>「+ New App」</strong>をクリックします。</li>
+            <li>アプリ作成時に、アプリケーションの名前、使用目的などを入力します。</li>
+            <li>作成したアプリケーションの詳細ページに移動し、<strong>「Keys and tokens」</strong>タブを選択します。</li>
+            <li>
+                ここで以下のキーを生成または確認します。
+                <ul>
+                    <li><strong>API Key (Consumer Key)</strong></li>
+                    <li><strong>API Secret (Consumer Secret)</strong></li>
+                    <li><strong>Access Token</strong> (まだ生成されていない場合は「Generate」または「Regenerate」をクリックして生成)</li>
+                    <li><strong>Access Token Secret</strong> (Access Tokenと同時に生成)</li>
+                </ul>
+                <div class="note">
+                    <p><strong>重要:</strong> Access TokenとAccess Token Secretを生成する際に、アプリケーションの<strong>User authentication settings</strong>で「App permissions」を「Read and write」に設定し、OAuth 1.0aを有効にしていることを確認してください。また、生成されたキーは一度しか表示されないため、必ず控えておいてください。</p>
+                </div>
+            </li>
+            <li>OBS Studioのスクリプト設定画面で、<strong>「Xに通知を送る」にチェックを入れ</strong>、以下の情報を入力します。
+                <ul>
+                    <li><strong>Xのアカウント名:</strong> あなたのXのユーザー名 (例: <code>@your_username</code>)</li>
+                    <li><strong>Xのパスワード:</strong> あなたのXのパスワード</li>
+                    <li><strong>XのAPIキー:</strong> 取得したAPI Key</li>
+                    <li><strong>XのシークレットAPIキー:</strong> 取得したAPI Secret</li>
+                    <li><strong>Xのアクセストークン:</strong> 取得したAccess Token</li>
+                    <li><strong>Xのシークレットトークン:</strong> 取得したAccess Token Secret</li>
+                </ul>
+            </li>
+        </ol>
+        <h3>Bluesky API設定</h3>
+        <p>Blueskyアカウントのユーザー名とパスワードをOBSのスクリプト設定に入力します。</p>
+        <ol>
+            <li>OBS Studioのスクリプト設定画面で、<strong>「Blueskyに通知を送る」にチェックを入れ</strong>、以下の情報を入力します。
+                <ul>
+                    <li><strong>Blueskyのアカウント名:</strong> あなたのBlueskyハンドル (例: <code>yourname.bsky.social</code>)</li>
+                    <li><strong>Blueskyのパスワード:</strong> あなたのBlueskyのパスワード</li>
+                </ul>
+            </li>
+        </ol>
+        <h3>Discord Webhook URL設定</h3>
+        <p>Discordの通知したいチャンネルでWebhook URLを作成し、OBSのスクリプト設定に入力します。</p>
+        <ol>
+            <li>Discordを開き、通知を送信したいサーバーのチャンネルを右クリックします。</li>
+            <li><strong>「チャンネル設定」</strong>→<strong>「連携サービス」</strong>→<strong>「Webhook」</strong>を選択し、新しいWebhookを作成します。</li>
+            <li>作成したWebhookの<strong>「Webhook URLをコピー」</strong>をクリックします。</li>
+            <li>OBS Studioのスクリプト設定画面で、<strong>「Discordに通知を送る」にチェックを入れ</strong>、以下の情報を入力します。
+                <ul>
+                    <li><strong>Webhook URL:</strong> コピーしたDiscordのWebhook URL</li>
+                </ul>
+            </li>
+        </ol>
+        <hr>
+
+        <h2><span class="step-number">⑦</span> 配信の開始</h2>
+        <p>すべての設定が完了したら、あとはOBS Studioで配信を開始するだけです。配信が開始されると、自動的に設定したプラットフォームに通知が投稿されます。</p>
+        <div class="note">
+            <p><strong>ヒント:</strong> スクリプトの動作状況は、OBS Studioの「ツール」→「スクリプト」ウィンドウの下部にあるログ出力エリアで確認できます。</p>
+        </div>
+    </div>
+</body>
+</html>
