@@ -1,43 +1,9 @@
-import os
-import shutil
-import glob
-
-# Pydanticが破損した際の修復プログラム
-try:
-    import pydantic
-
-except Exception as e:
-    print(f"pydanticでエラーが発生しました。修復作業に入ります。\n{e}")
-    USERPROFILE = os.environ['USERPROFILE']
-    remove_list = glob.glob(f"{USERPROFILE}\\AppData\\Local\\Programs\\Python\\Python310\\Lib\site-packages\\pydantic*")
-
-    for i in remove_list:
-        shutil.rmtree(i)
-
-
 import obspython as obs
 import get_twitch_info
 
 import datetime
 import threading
 import time
-import subprocess
-
-
-# 必須ライブラリの導入が済んでいない
-try:
-    import atproto
-    import tweepy
-    import requests
-
-except ImportError:
-    subprocess.run(
-                    ["python -m pip install --upgrade pip",
-                    "pip install atproto",
-                    "pip install tweepy",
-                    "pip install -U requests"],
-                    shell=True
-                    )
 
 # ==========================
 # グローバル変数定義
