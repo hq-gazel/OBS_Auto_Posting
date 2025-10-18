@@ -1,23 +1,23 @@
 import obspython as obs
 import get_twitch_info
 
-
 import requests
-import tweepy
-import atproto
 
-import datetime
 import threading
 import time
+import re
+import subprocess
 
 # ==========================
 # グローバル変数定義
 # ==========================
-version = 1.0
+version = 1.03
 
 twitch_acc = ""
 twitch_client_id = ""
 twitch_client_secret = ""
+get_info_cnt = 10
+get_info_interval = 15
 
 notify_X = False
 X_account = ""
@@ -44,6 +44,8 @@ hashtags = ""
 stream_title = ""
 game_name = ""
 tags = ""
+SNS_retry_cnt = 5
+SNS_retry_interval = 60
 
 class info_getter(threading.Thread):
     def __init__(self):
@@ -51,8 +53,11 @@ class info_getter(threading.Thread):
 
     def run(self):
         print(f"OBS Auto Post ver: {version}\nCreated by shin-hq")
+        subprocess.run("pip install uv")
+        subprocess.run("uv pip install pip-review atproto tweepy --system")
+        subprocess.run("uv run pip-review --auto")
 
-        max_retry = 15  # 最大リトライ回数（例: 10秒×15回=150秒）
+        max_retry = get_info_cnt  # 最大リトライ回数（例: 10秒×15回=150秒）
         for i in range(max_retry):
             try:
                 stream_title, game_name, tags = get_twitch_info.get_twitch_info(
@@ -61,29 +66,32 @@ class info_getter(threading.Thread):
 
             except Exception as e:
                 if i == max_retry - 1:
-                    return log(f"配信情報の取得中にエラーが発生しました: {e}[{datetime.datetime.now()}]")
-                time.sleep(10)  # 10秒待って再試行
+                    return log(f"配信情報の取得中にエラーが発生しました: {e}")
+                time.sleep(get_info_interval)  # 15秒待って再試行
 
         message = f"{stream_title} ({game_name})"
         url = f"https://www.twitch.tv/{twitch_acc}"
         tags_str = " ".join([f"#{i}" for i in tags])
-        log(f"配信情報を取得しました: {message}\nタグ: {tags_str}[{datetime.datetime.now()}]")
+        log(f"配信情報を取得しました: {message}\nタグ: {tags_str}")
 
         # 取得できなかった場合は処理をしない
         if not stream_title:
-            return
+            return log("配信情報が正常に取得出来ず、何回か再試行しましたがダメでした。")
 
         # Bluesky通知
         if notify_bluesky and Bluesky_account and Bluesky_password:
-            send_Bluesky_notification(message, tags_str, url)
+            thread_B = threading.Thread(target=send_Bluesky_notification, args=(message, tags_str, url))
+            thread_B.start()
 
         # X通知
         if notify_X and X_account and X_password and X_API_key and X_API_secret and X_access_token and X_access_secret:
-            send_X_notification(message, tags_str, url)
+            thread_C = threading.Thread(target=send_X_notification, args=(message, tags_str, url))
+            thread_C.start()
 
         # Discord通知
         if notify_discord and webhook_url:
-            send_discord_notification(message, url)
+            thread_D = threading.Thread(target=send_discord_notification, args=(message, url))
+            thread_D.start()
 
         # mixi2通知（コメントアウト中）
         # if notify_mixi2 and mixi2_account and stream_title is not None:
@@ -118,59 +126,93 @@ def script_load(settings):
 # ==========================
 def on_event(event):
     if event == obs.OBS_FRONTEND_EVENT_STREAMING_STARTED:
-        log(f"配信が開始されました。情報を取得中... [{datetime.datetime.now()}]")
+
+        log("配信が開始されました。情報を取得中... ")
         thread_A = info_getter()
 
         thread_A.start()
 
     elif event == obs.OBS_FRONTEND_EVENT_STREAMING_STOPPED:
-        log(f"配信が停止されました。[{datetime.datetime.now()}]")
+        log("配信が停止されました。")
 
 # ==========================
 # Discordに通知を送信する関数
 # ==========================
 def send_discord_notification(message, url):
     payload = {"content": f"{message}\n\n{url}"}
-    try:
-        res = requests.post(webhook_url, json=payload)
-        if res.status_code == 204:
-            print(f"Discordに通知を送信しました。[{datetime.datetime.now()}]")
-        else:
-            print(f"エラーが発生しました。{res.status_code} - {res.text}")
-    except Exception as e:
-        print(f"Discord通知送信中にエラー: {e}")
+    y = 0
+
+    while SNS_retry_cnt > y:
+        try:
+            res = requests.post(webhook_url, json=payload)
+            if res.status_code == 204:
+                print("Discordに通知を送信しました。")
+                break
+
+        except Exception as e:
+            print(f"Discord通知送信中にエラー: {e}")
+            time.sleep(SNS_retry_interval)
+
+        finally:
+            y += 1
 
 # ==========================
 # Xに通知を送信する関数
 # ==========================
 def send_X_notification(message, tags_str, url):
-    try:
-        X_client = tweepy.Client(
-            consumer_key=X_API_key,
-            consumer_secret=X_API_secret,
-            access_token=X_access_token,
-            access_token_secret=X_access_secret
-        )
-        X_client.create_tweet(text=f"{message}\n{url}\n\n{tags_str}")
+    import tweepy
 
-    except Exception as e:
-        print(f"Xのアカウント情報が不足しているか、一時的なネットワークエラーです。\n{e}")
+    x = 0
+    while SNS_retry_cnt > x:
+        try:
+            X_client = tweepy.Client(
+                consumer_key=X_API_key,
+                consumer_secret=X_API_secret,
+                access_token=X_access_token,
+                access_token_secret=X_access_secret
+            )
+            X_client.create_tweet(text=f"{message}\n{url}\n\n{tags_str}")
+            break
+
+        except Exception as e:
+            print(f"Xのアカウント情報が不足しているか、一時的なネットワークエラーです。\n{e}")
+            time.sleep(SNS_retry_interval)
+
+        finally:
+            x += 1
 
 # ==========================
 # Blueskyに通知を送信する関数
 # ==========================
 def send_Bluesky_notification(message, tags_str, url):
-    try:
-        bs_client = atproto.Client()
-        bs_client.login(Bluesky_account, Bluesky_password)
-        text_builder = atproto.client_utils.TextBuilder().text(f"{message}\n").link(text="Twitch URL", url=url).text("\n\n")
-        for tag in tags_str.split(" "):
-            text_builder = text_builder.tag(text=tag, tag=tag).text(" ")
+    global Bluesky_account
+    import atproto
 
-        bs_client.send_post(text_builder)
+    i = 0
+    if not re.search(r"\.bsky\.social", Bluesky_account, re.IGNORECASE):
+        Bluesky_account = f"{Bluesky_account}.bsky.social"
 
-    except Exception as e:
-        print(f"Blueskyへの通知送信に失敗しました。アカウント情報を確認してください。\n{e}")
+    if Bluesky_account.startswith("@"):
+       Bluesky_account = Bluesky_account.strip("@")
+
+    while SNS_retry_cnt > i:
+        try:
+            bs_client = atproto.Client()
+            bs_client.login(Bluesky_account, Bluesky_password)
+            text_builder = atproto.client_utils.TextBuilder().text(f"{message}\n").link(text="Twitch URL", url=url).text("\n\n")
+            for tag in tags_str.split(" "):
+                text_builder = text_builder.tag(text=tag, tag=tag).text(" ")
+
+            bs_client.send_post(text_builder)
+            break
+
+        except Exception as e:
+            print(f"Blueskyへの通知送信に失敗しました。アカウント情報を確認してください。\n{e}")
+            time.sleep(SNS_retry_interval)
+
+        finally:
+            i += 1
+
 
 # ==========================
 # 設定変更・リロード時に呼ばれる関数
