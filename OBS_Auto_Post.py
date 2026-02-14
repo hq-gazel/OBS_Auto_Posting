@@ -6,7 +6,6 @@ import requests
 import threading
 import time
 import re
-import subprocess
 
 # ==========================
 # グローバル変数定義
@@ -31,10 +30,6 @@ notify_bluesky = False
 Bluesky_account = ""
 Bluesky_password = ""
 
-# notify_mixi2 = False
-# mixi2_account = ""
-# mixi2_password = ""
-
 notify_discord = False
 webhook_url = ""
 
@@ -46,28 +41,32 @@ game_name = ""
 tags = ""
 SNS_retry_cnt = 5
 SNS_retry_interval = 60
+REQUEST_TIMEOUT = 10
+
 
 class info_getter(threading.Thread):
     def __init__(self):
-        super().__init__()
+        super().__init__(daemon=True)
 
     def run(self):
         print(f"OBS Auto Post ver: {version}\nCreated by shin-hq")
-        subprocess.run("pip install uv")
-        subprocess.run("uv pip install pip-review atproto tweepy --system")
-        subprocess.run("uv run pip-review --auto")
 
-        max_retry = get_info_cnt  # 最大リトライ回数（例: 10秒×15回=150秒）
+        stream_title = ""
+        game_name = ""
+        tags = []
+
+        max_retry = max(get_info_cnt, 1)
         for i in range(max_retry):
             try:
                 stream_title, game_name, tags = get_twitch_info.get_twitch_info(
                     twitch_client_id, twitch_client_secret, twitch_acc
                 )
-
+                break
             except Exception as e:
                 if i == max_retry - 1:
                     return log(f"配信情報の取得中にエラーが発生しました: {e}")
-                time.sleep(get_info_interval)  # 15秒待って再試行
+                log(f"配信情報の取得に失敗しました。{i + 1}/{max_retry}回目: {e}")
+                time.sleep(max(get_info_interval, 1))
 
         message = f"{stream_title} ({game_name})"
         url = f"https://www.twitch.tv/{twitch_acc}"
@@ -80,23 +79,30 @@ class info_getter(threading.Thread):
 
         # Bluesky通知
         if notify_bluesky and Bluesky_account and Bluesky_password:
-            thread_B = threading.Thread(target=send_Bluesky_notification, args=(message, tags_str, url))
+            thread_B = threading.Thread(
+                target=send_Bluesky_notification,
+                args=(message, tags, url),
+                daemon=True,
+            )
             thread_B.start()
 
         # X通知
-        if notify_X and X_account and X_password and X_API_key and X_API_secret and X_access_token and X_access_secret:
-            thread_C = threading.Thread(target=send_X_notification, args=(message, tags_str, url))
+        if notify_X and X_API_key and X_API_secret and X_access_token and X_access_secret:
+            thread_C = threading.Thread(
+                target=send_X_notification,
+                args=(message, tags_str, url),
+                daemon=True,
+            )
             thread_C.start()
 
         # Discord通知
         if notify_discord and webhook_url:
-            thread_D = threading.Thread(target=send_discord_notification, args=(message, url))
+            thread_D = threading.Thread(
+                target=send_discord_notification,
+                args=(message, url),
+                daemon=True,
+            )
             thread_D.start()
-
-        # mixi2通知（コメントアウト中）
-        # if notify_mixi2 and mixi2_account and stream_title is not None:
-        #     send_mixi2_notification(message, tags_str)
-
 
 # ==========================
 # ログ出力関数
@@ -109,7 +115,7 @@ def log(message):
 # ==========================
 def script_description():
     return (
-        "配信開始時にX, Bluesky, mixi2に自動通知するPythonスクリプト。"
+        "配信開始時にX, Blueskyに自動通知するPythonスクリプト。"
         "DiscordはWebhookを介して通知します。"
     )
 
@@ -126,10 +132,8 @@ def script_load(settings):
 # ==========================
 def on_event(event):
     if event == obs.OBS_FRONTEND_EVENT_STREAMING_STARTED:
-
         log("配信が開始されました。情報を取得中... ")
         thread_A = info_getter()
-
         thread_A.start()
 
     elif event == obs.OBS_FRONTEND_EVENT_STREAMING_STOPPED:
@@ -140,78 +144,94 @@ def on_event(event):
 # ==========================
 def send_discord_notification(message, url):
     payload = {"content": f"{message}\n\n{url}"}
-    y = 0
-
-    while SNS_retry_cnt > y:
+    retry_count = max(SNS_retry_cnt, 1)
+    for y in range(retry_count):
         try:
-            res = requests.post(webhook_url, json=payload)
+            res = requests.post(webhook_url, json=payload, timeout=REQUEST_TIMEOUT)
             if res.status_code == 204:
-                print("Discordに通知を送信しました。")
-                break
+                return log("Discordに通知を送信しました。")
+            log(f"Discord通知送信に失敗しました。status={res.status_code}, body={res.text[:200]}")
+        except requests.RequestException as e:
+            log(f"Discord通知送信中にネットワークエラー: {e}")
 
-        except Exception as e:
-            print(f"Discord通知送信中にエラー: {e}")
-            time.sleep(SNS_retry_interval)
+        if y != retry_count - 1:
+            time.sleep(max(SNS_retry_interval, 1))
 
-        finally:
-            y += 1
+    log("Discord通知の送信を中断しました。")
 
 # ==========================
 # Xに通知を送信する関数
 # ==========================
 def send_X_notification(message, tags_str, url):
-    import tweepy
+    try:
+        import tweepy
+    except Exception as e:
+        return log(f"tweepyの読み込みに失敗しました。依存ライブラリをインストールしてください: {e}")
 
-    x = 0
-    while SNS_retry_cnt > x:
+    retry_count = max(SNS_retry_cnt, 1)
+    X_client = tweepy.Client(
+        consumer_key=X_API_key,
+        consumer_secret=X_API_secret,
+        access_token=X_access_token,
+        access_token_secret=X_access_secret,
+    )
+    for x in range(retry_count):
         try:
-            X_client = tweepy.Client(
-                consumer_key=X_API_key,
-                consumer_secret=X_API_secret,
-                access_token=X_access_token,
-                access_token_secret=X_access_secret
-            )
             X_client.create_tweet(text=f"{message}\n{url}\n\n{tags_str}")
-            break
+            return log("Xに通知を送信しました。")
 
         except Exception as e:
-            print(f"Xのアカウント情報が不足しているか、一時的なネットワークエラーです。\n{e}")
-            time.sleep(SNS_retry_interval)
+            log(f"Xへの通知送信に失敗しました。{x + 1}/{retry_count}回目: {e}")
+            if x != retry_count - 1:
+                time.sleep(max(SNS_retry_interval, 1))
 
-        finally:
-            x += 1
+    log("X通知の送信を中断しました。")
 
 # ==========================
 # Blueskyに通知を送信する関数
 # ==========================
-def send_Bluesky_notification(message, tags_str, url):
-    global Bluesky_account
-    import atproto
+def normalize_bluesky_account(account):
+    normalized = account.strip()
+    if normalized.startswith("@"):
+        normalized = normalized[1:]
+    if not re.search(r"\.bsky\.social$", normalized, re.IGNORECASE):
+        normalized = f"{normalized}.bsky.social"
+    return normalized
 
-    i = 0
-    if not re.search(r"\.bsky\.social", Bluesky_account, re.IGNORECASE):
-        Bluesky_account = f"{Bluesky_account}.bsky.social"
 
-    if Bluesky_account.startswith("@"):
-       Bluesky_account = Bluesky_account.strip("@")
+def send_Bluesky_notification(message, tags, url):
+    try:
+        import atproto
+    except Exception as e:
+        return log(f"atprotoの読み込みに失敗しました。依存ライブラリをインストールしてください: {e}")
 
-    while SNS_retry_cnt > i:
+    retry_count = max(SNS_retry_cnt, 1)
+    bluesky_account = normalize_bluesky_account(Bluesky_account)
+    for i in range(retry_count):
         try:
             bs_client = atproto.Client()
-            bs_client.login(Bluesky_account, Bluesky_password)
-            text_builder = atproto.client_utils.TextBuilder().text(f"{message}\n").link(text="Twitch URL", url=url).text("\n\n")
-            for tag in tags_str.split(" "):
-                text_builder = text_builder.tag(text=tag, tag=tag).text(" ")
+            bs_client.login(bluesky_account, Bluesky_password)
+
+            text_builder = (
+                atproto.client_utils.TextBuilder()
+                .text(f"{message}\n")
+                .link(text="Twitch URL", url=url)
+                .text("\n\n")
+            )
+            for tag in tags:
+                clean_tag = str(tag).strip().lstrip("#")
+                if clean_tag:
+                    text_builder = text_builder.tag(text=f"#{clean_tag}", tag=clean_tag).text(" ")
 
             bs_client.send_post(text_builder)
-            break
+            return log("Blueskyに通知を送信しました。")
 
         except Exception as e:
-            print(f"Blueskyへの通知送信に失敗しました。アカウント情報を確認してください。\n{e}")
-            time.sleep(SNS_retry_interval)
+            log(f"Blueskyへの通知送信に失敗しました。{i + 1}/{retry_count}回目: {e}")
+            if i != retry_count - 1:
+                time.sleep(max(SNS_retry_interval, 1))
 
-        finally:
-            i += 1
+    log("Bluesky通知の送信を中断しました。")
 
 
 # ==========================
@@ -222,7 +242,6 @@ def script_update(settings):
     global notify_discord, webhook_url
     global notify_X, X_account, X_password, X_API_key, X_API_secret, X_access_token, X_access_secret
     global notify_bluesky, Bluesky_account, Bluesky_password
-    # global notify_mixi2, mixi2_account, mixi2_password
 
     # 各種設定値を取得
     twitch_acc = obs.obs_data_get_string(settings, "twitch_acc")
@@ -243,10 +262,6 @@ def script_update(settings):
     notify_bluesky = obs.obs_data_get_bool(settings, "notify_Bluesky")
     Bluesky_account = obs.obs_data_get_string(settings, "Bluesky_account")
     Bluesky_password = obs.obs_data_get_string(settings, "Bluesky_password")
-
-    # notify_mixi2 = obs.obs_data_get_bool(settings, "notify_mixi2")
-    # mixi2_account = obs.obs_data_get_string(settings, "mixi2_account")
-    # mixi2_password = obs.obs_data_get_string(settings, "mixi2_password")
 
 # ==========================
 # OBSプロパティ（設定UI）定義
@@ -272,11 +287,6 @@ def script_properties():
     obs.obs_properties_add_bool(props, "notify_Bluesky", "Blueskyに通知を送る")
     obs.obs_properties_add_text(props, "Bluesky_account", "Blueskyのアカウント名", obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_text(props, "Bluesky_password", "Blueskyのパスワード", obs.OBS_TEXT_PASSWORD)
-
-    # # mixi2設定
-    # obs.obs_properties_add_bool(props, "notify_mixi2", "mixi2に通知を送る")
-    # obs.obs_properties_add_text(props, "mixi2_account", "mixi2のアカウント名", obs.OBS_TEXT_DEFAULT)
-    # obs.obs_properties_add_text(props, "mixi2_password", "mixi2のパスワード", obs.OBS_TEXT_PASSWORD)
 
     # Discord設定
     obs.obs_properties_add_bool(props, "notify_discord", "Discordに通知を送る")
