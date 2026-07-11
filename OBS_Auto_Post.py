@@ -32,7 +32,7 @@ webhook_url = ""
 debug_log = False
 
 SNS_retry_cnt = 5
-SNS_retry_interval = 60
+SNS_retry_interval = 100
 REQUEST_TIMEOUT = 10
 
 _TWITTER_URL_CHARS = 23  # Twitter は URL を常に23文字でカウント
@@ -140,6 +140,8 @@ def script_description():
 def script_defaults(settings):
     obs.obs_data_set_default_int(settings, "get_info_cnt", 10)
     obs.obs_data_set_default_int(settings, "get_info_interval", 15)
+    obs.obs_data_set_default_int(settings, "SNS_retry_cnt", 5)
+    obs.obs_data_set_default_int(settings, "SNS_retry_interval", 100)
     obs.obs_data_set_default_bool(settings, "notify_X", False)
     obs.obs_data_set_default_bool(settings, "notify_Bluesky", False)
     obs.obs_data_set_default_bool(settings, "notify_discord", False)
@@ -204,6 +206,12 @@ def send_X_notification(message, tags_str, url):
                 raise _NonRetryableError(
                     f"HTTP {status} 認証/権限エラー。X Developer Portalでアプリ権限とアクセストークンを確認してください。"
                 )
+            if status == 400:
+                raise _NonRetryableError(
+                    f"HTTP {status} リクエスト内容が不正です(重複ツイート等の可能性があります)。再試行しても解消しません。"
+                )
+            if status == 429:
+                log("X APIのレート制限(429)に達しました。")
             raise
 
     _with_retry(_post, "X")
@@ -241,6 +249,7 @@ def send_Bluesky_notification(message, tags, url):
 def script_update(settings):
     global twitch_acc, twitch_client_id, twitch_client_secret
     global get_info_cnt, get_info_interval
+    global SNS_retry_cnt, SNS_retry_interval
     global notify_discord, webhook_url
     global notify_X, X_account, X_password, X_API_key, X_API_secret, X_access_token, X_access_secret
     global notify_bluesky, Bluesky_account, Bluesky_password
@@ -251,6 +260,8 @@ def script_update(settings):
     twitch_client_secret = obs.obs_data_get_string(settings, "twitch_client_secret")
     get_info_cnt = obs.obs_data_get_int(settings, "get_info_cnt")
     get_info_interval = obs.obs_data_get_int(settings, "get_info_interval")
+    SNS_retry_cnt = obs.obs_data_get_int(settings, "SNS_retry_cnt")
+    SNS_retry_interval = obs.obs_data_get_int(settings, "SNS_retry_interval")
 
     notify_discord = obs.obs_data_get_bool(settings, "notify_discord")
     webhook_url = obs.obs_data_get_string(settings, "webhook_url")
@@ -273,7 +284,8 @@ def script_update(settings):
         f"script_update: twitch_acc={twitch_acc or '(未設定)'}, "
         f"twitch_client_id={'設定済み' if twitch_client_id else '(未設定)'}, "
         f"twitch_client_secret={_mask_secret(twitch_client_secret)}, "
-        f"get_info_cnt={get_info_cnt}, get_info_interval={get_info_interval}"
+        f"get_info_cnt={get_info_cnt}, get_info_interval={get_info_interval}, "
+        f"SNS_retry_cnt={SNS_retry_cnt}, SNS_retry_interval={SNS_retry_interval}"
     )
     debug(f"script_update: notify_discord={notify_discord}, webhook_url={_mask_secret(webhook_url)}")
     debug(
@@ -355,6 +367,9 @@ def script_properties():
     props = obs.obs_properties_create()
 
     obs.obs_properties_add_bool(props, "debug_log", "デバッグログを有効にする")
+
+    obs.obs_properties_add_int(props, "SNS_retry_cnt", "SNS通知リトライ回数", 1, 30, 1)
+    obs.obs_properties_add_int(props, "SNS_retry_interval", "SNS通知リトライ間隔 (秒)", 1, 600, 1)
 
     obs.obs_properties_add_text(props, "twitch_acc", "Twitch Account ID", obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_text(props, "twitch_client_id", "Twitch Client ID", obs.OBS_TEXT_PASSWORD)
