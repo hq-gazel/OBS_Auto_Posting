@@ -200,7 +200,7 @@ def send_X_notification(message, tags_str, url):
         try:
             client.create_tweet(text=tweet_text)
         except tweepy.errors.HTTPException as e:
-            status = getattr(e, "status_code", "?")
+            status = getattr(getattr(e, "response", None), "status_code", "?")
             log(f"X APIエラー HTTP {status}: {e}")
             if status in (401, 403):
                 raise _NonRetryableError(
@@ -209,6 +209,11 @@ def send_X_notification(message, tags_str, url):
             if status == 400:
                 raise _NonRetryableError(
                     f"HTTP {status} リクエスト内容が不正です(重複ツイート等の可能性があります)。再試行しても解消しません。"
+                )
+            if status == 402:
+                raise _NonRetryableError(
+                    f"HTTP {status} X APIのクレジットが枯渇しています。"
+                    "X Developer Portal (console.x.com) でAPIクレジット残高・プランを確認してください。"
                 )
             if status == 429:
                 log("X APIのレート制限(429)に達しました。")
