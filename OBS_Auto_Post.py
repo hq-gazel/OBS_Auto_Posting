@@ -134,7 +134,6 @@ def script_load(settings):
 
 
 def on_event(event):
-    debug(f"on_event: event={event}")
     if event == obs.OBS_FRONTEND_EVENT_STREAMING_STARTED:
         log("配信が開始されました。情報を取得中... ")
         threading.Thread(target=_fetch_stream_info, daemon=True).start()
