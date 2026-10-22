@@ -14,14 +14,6 @@ twitch_client_secret = ""
 get_info_cnt = 10
 get_info_interval = 15
 
-notify_X = False
-X_account = ""
-X_password = ""
-X_API_key = ""
-X_API_secret = ""
-X_access_token = ""
-X_access_secret = ""
-
 notify_bluesky = False
 Bluesky_account = ""
 Bluesky_password = ""
@@ -34,9 +26,6 @@ debug_log = False
 SNS_retry_cnt = 5
 SNS_retry_interval = 100
 REQUEST_TIMEOUT = 10
-
-_TWITTER_URL_CHARS = 23  # Twitter は URL を常に23文字でカウント
-_TWEET_MAX = 280
 
 
 def log(message):
@@ -52,10 +41,6 @@ def _mask_secret(value):
     return "***" if value else "(未設定)"
 
 
-class _NonRetryableError(Exception):
-    pass
-
-
 def _with_retry(fn, name):
     retry_count = max(SNS_retry_cnt, 1)
     for i in range(retry_count):
@@ -63,8 +48,6 @@ def _with_retry(fn, name):
         try:
             fn()
             return log(f"{name}に通知を送信しました。")
-        except _NonRetryableError as e:
-            return log(f"{name}への通知を中断しました: {e}")
         except Exception as e:
             log(f"{name}への通知送信に失敗しました。{i + 1}/{retry_count}回目: {e}")
             if i != retry_count - 1:
@@ -126,15 +109,12 @@ def _fetch_stream_info():
     if notify_bluesky and Bluesky_account and Bluesky_password:
         threading.Thread(target=send_Bluesky_notification, args=(message, tags, url), daemon=True).start()
 
-    if notify_X and X_API_key and X_API_secret and X_access_token and X_access_secret:
-        threading.Thread(target=send_X_notification, args=(message, tags_str, url), daemon=True).start()
-
     if notify_discord and webhook_url:
         threading.Thread(target=send_discord_notification, args=(message, url), daemon=True).start()
 
 
 def script_description():
-    return "配信開始時にX, Blueskyに自動通知するPythonスクリプト。DiscordはWebhookを介して通知します。"
+    return "配信開始時にBlueskyに自動通知するPythonスクリプト。DiscordはWebhookを介して通知します。"
 
 
 def script_defaults(settings):
@@ -142,7 +122,6 @@ def script_defaults(settings):
     obs.obs_data_set_default_int(settings, "get_info_interval", 15)
     obs.obs_data_set_default_int(settings, "SNS_retry_cnt", 5)
     obs.obs_data_set_default_int(settings, "SNS_retry_interval", 100)
-    obs.obs_data_set_default_bool(settings, "notify_X", False)
     obs.obs_data_set_default_bool(settings, "notify_Bluesky", False)
     obs.obs_data_set_default_bool(settings, "notify_discord", False)
     obs.obs_data_set_default_bool(settings, "debug_log", False)
@@ -173,53 +152,6 @@ def send_discord_notification(message, url):
 
     debug("Discordへの通知送信を開始します。")
     _with_retry(_send, "Discord")
-
-
-def send_X_notification(message, tags_str, url):
-    try:
-        import tweepy
-    except Exception as e:
-        return log(f"tweepyの読み込みに失敗しました。依存ライブラリをインストールしてください: {e}")
-
-    client = tweepy.Client(
-        consumer_key=X_API_key,
-        consumer_secret=X_API_secret,
-        access_token=X_access_token,
-        access_token_secret=X_access_secret,
-    )
-
-    # URL は Twitter 側で23文字扱い・280文字制限に収まるようタイトルをトリム
-    footer_len = 1 + _TWITTER_URL_CHARS + 2 + len(tags_str)  # \n + url(23) + \n\n + tags
-    max_msg = _TWEET_MAX - footer_len
-    trimmed = message if len(message) <= max_msg else message[:max(0, max_msg - 3)] + "..."
-    tweet_text = f"{trimmed}\n{url}\n\n{tags_str}"
-
-    debug("Xへの通知送信を開始します。")
-
-    def _post():
-        try:
-            client.create_tweet(text=tweet_text)
-        except tweepy.errors.HTTPException as e:
-            status = getattr(getattr(e, "response", None), "status_code", "?")
-            log(f"X APIエラー HTTP {status}: {e}")
-            if status in (401, 403):
-                raise _NonRetryableError(
-                    f"HTTP {status} 認証/権限エラー。X Developer Portalでアプリ権限とアクセストークンを確認してください。"
-                )
-            if status == 400:
-                raise _NonRetryableError(
-                    f"HTTP {status} リクエスト内容が不正です(重複ツイート等の可能性があります)。再試行しても解消しません。"
-                )
-            if status == 402:
-                raise _NonRetryableError(
-                    f"HTTP {status} X APIのクレジットが枯渇しています。"
-                    "X Developer Portal (console.x.com) でAPIクレジット残高・プランを確認してください。"
-                )
-            if status == 429:
-                log("X APIのレート制限(429)に達しました。")
-            raise
-
-    _with_retry(_post, "X")
 
 
 def _normalize_bluesky_account(account):
@@ -256,7 +188,6 @@ def script_update(settings):
     global get_info_cnt, get_info_interval
     global SNS_retry_cnt, SNS_retry_interval
     global notify_discord, webhook_url
-    global notify_X, X_account, X_password, X_API_key, X_API_secret, X_access_token, X_access_secret
     global notify_bluesky, Bluesky_account, Bluesky_password
     global debug_log
 
@@ -270,14 +201,6 @@ def script_update(settings):
 
     notify_discord = obs.obs_data_get_bool(settings, "notify_discord")
     webhook_url = obs.obs_data_get_string(settings, "webhook_url")
-
-    notify_X = obs.obs_data_get_bool(settings, "notify_X")
-    X_account = obs.obs_data_get_string(settings, "X_account")
-    X_password = obs.obs_data_get_string(settings, "X_password")
-    X_API_key = obs.obs_data_get_string(settings, "X_API_key")
-    X_API_secret = obs.obs_data_get_string(settings, "X_API_secret")
-    X_access_token = obs.obs_data_get_string(settings, "X_access_token")
-    X_access_secret = obs.obs_data_get_string(settings, "X_access_secret")
 
     notify_bluesky = obs.obs_data_get_bool(settings, "notify_Bluesky")
     Bluesky_account = obs.obs_data_get_string(settings, "Bluesky_account")
@@ -293,12 +216,6 @@ def script_update(settings):
         f"SNS_retry_cnt={SNS_retry_cnt}, SNS_retry_interval={SNS_retry_interval}"
     )
     debug(f"script_update: notify_discord={notify_discord}, webhook_url={_mask_secret(webhook_url)}")
-    debug(
-        f"script_update: notify_X={notify_X}, X_account={X_account or '(未設定)'}, "
-        f"X_password={_mask_secret(X_password)}, X_API_key={_mask_secret(X_API_key)}, "
-        f"X_API_secret={_mask_secret(X_API_secret)}, X_access_token={_mask_secret(X_access_token)}, "
-        f"X_access_secret={_mask_secret(X_access_secret)}"
-    )
     debug(
         f"script_update: notify_bluesky={notify_bluesky}, Bluesky_account={Bluesky_account or '(未設定)'}, "
         f"Bluesky_password={_mask_secret(Bluesky_password)}"
@@ -330,23 +247,6 @@ def _run_connection_test():
             log(f"[NG] Discord: {e}")
     else:
         log("[--] Discord: 未設定または無効のためスキップしました。")
-
-    if notify_X and X_API_key and X_API_secret and X_access_token and X_access_secret:
-        try:
-            import tweepy
-
-            client = tweepy.Client(
-                consumer_key=X_API_key,
-                consumer_secret=X_API_secret,
-                access_token=X_access_token,
-                access_token_secret=X_access_secret,
-            )
-            client.get_me()
-            log("[OK] X: 認証に成功しました。")
-        except Exception as e:
-            log(f"[NG] X: {e}")
-    else:
-        log("[--] X: 未設定または無効のためスキップしました。")
 
     if notify_bluesky and Bluesky_account and Bluesky_password:
         try:
@@ -381,14 +281,6 @@ def script_properties():
     obs.obs_properties_add_text(props, "twitch_client_secret", "Twitch Client Secret", obs.OBS_TEXT_PASSWORD)
     obs.obs_properties_add_int(props, "get_info_cnt", "配信情報取得リトライ回数", 1, 30, 1)
     obs.obs_properties_add_int(props, "get_info_interval", "配信情報取得リトライ間隔 (秒)", 1, 300, 1)
-
-    obs.obs_properties_add_bool(props, "notify_X", "Xに通知を送る")
-    obs.obs_properties_add_text(props, "X_account", "Xのアカウント名", obs.OBS_TEXT_DEFAULT)
-    obs.obs_properties_add_text(props, "X_password", "Xのパスワード", obs.OBS_TEXT_PASSWORD)
-    obs.obs_properties_add_text(props, "X_API_key", "XのAPIキー", obs.OBS_TEXT_PASSWORD)
-    obs.obs_properties_add_text(props, "X_API_secret", "XのシークレットAPIキー", obs.OBS_TEXT_PASSWORD)
-    obs.obs_properties_add_text(props, "X_access_token", "Xのアクセストークン", obs.OBS_TEXT_PASSWORD)
-    obs.obs_properties_add_text(props, "X_access_secret", "Xのシークレットトークン", obs.OBS_TEXT_PASSWORD)
 
     obs.obs_properties_add_bool(props, "notify_Bluesky", "Blueskyに通知を送る")
     obs.obs_properties_add_text(props, "Bluesky_account", "Blueskyのアカウント名", obs.OBS_TEXT_DEFAULT)

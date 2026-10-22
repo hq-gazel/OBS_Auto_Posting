@@ -1,6 +1,6 @@
 # OBS Auto Post
 
-OBS Studioで配信を開始した際に、X (旧Twitter)、Bluesky、Discordへ自動的に開始通知を投稿するPythonスクリプトです。
+OBS Studioで配信を開始した際に、Bluesky、Discordへ自動的に開始通知を投稿するPythonスクリプトです。
 
 ## セットアップ
 
@@ -62,35 +62,6 @@ OBSのスクリプト設定画面で、各サービスのAPI情報を入力し�
    - **Twitch Client ID**: 取得したClient ID
    - **Twitch Client Secret**: 取得したClient Secret
 
-#### X (旧Twitter) API設定
-
-> [!IMPORTANT]
-> Xは2026年2月からAPIの新規開発者向け無料枠を廃止しており、X投稿機能を利用するには有料プランへの加入、または従量課金クレジットの購入が必要です。X Developer Portal ([console.x.com](https://console.x.com/)) でプラン・クレジット残高を確認してください。クレジットが枯渇すると投稿はエラー(HTTP 402 "credits depleted")で失敗します。この場合スクリプト側の設定に問題はなく、ポータル側でのクレジット補充・プラン加入が必要です。
-
-X DeveloperサイトでAPIキーなどを取得し、OBSのスクリプト設定に入力します。X APIの利用には、開発者アカウントの申請とプロジェクト・アプリの作成が必要です。
-
-1. [X Developer Portal](https://developer.twitter.com/en/portal/dashboard) にログインします。開発者アカウントをお持ちでない場合は、申請プロセスを完了させてください。
-2. ダッシュボードで「Projects & Apps」セクションに移動し、「+ New Project」をクリックして新しいプロジェクトを作成します。
-3. プロジェクト作成後、そのプロジェクト内で新しいアプリケーション (App) を作成します。「Add App」または「+ New App」をクリックします。
-4. アプリ作成時に、アプリケーションの名前、使用目的などを入力します。
-5. 作成したアプリケーションの詳細ページに移動し、「Keys and tokens」タブを選択します。
-6. 以下のキーを生成または確認します。
-   - **API Key (Consumer Key)**
-   - **API Secret (Consumer Secret)**
-   - **Access Token** (まだ生成されていない場合は「Generate」または「Regenerate」をクリックして生成)
-   - **Access Token Secret** (Access Tokenと同時に生成)
-
-   > [!NOTE]
-   > Access TokenとAccess Token Secretを生成する際に、アプリケーションの「User authentication settings」で「App permissions」を「Read and write」に設定し、OAuth 1.0aを有効にしていることを確認してください。また、生成されたキーは一度しか表示されないため、必ず控えておいてください。
-
-7. OBS Studioのスクリプト設定画面で「Xに通知を送る」にチェックを入れ、以下の情報を入力します。
-   - **Xのアカウント名**: あなたのXのユーザー名 (例: `@your_username`)
-   - **Xのパスワード**: あなたのXのパスワード
-   - **XのAPIキー**: 取得したAPI Key
-   - **XのシークレットAPIキー**: 取得したAPI Secret
-   - **Xのアクセストークン**: 取得したAccess Token
-   - **Xのシークレットトークン**: 取得したAccess Token Secret
-
 #### Bluesky API設定
 
 OBS Studioのスクリプト設定画面で「Blueskyに通知を送る」にチェックを入れ、以下の情報を入力します。
@@ -110,7 +81,7 @@ OBS Studioのスクリプト設定画面で「Blueskyに通知を送る」にチ
 
 ### 接続テストの実行(推奨)
 
-各種API情報を入力したら、配信を開始する前に動作確認を行うことをおすすめします。OBSのスクリプト設定画面の一番下にある「接続テスト」ボタンをクリックすると、Twitch・Discord・X・Blueskyのうち設定済みのサービスについてのみ接続確認を行います(実際の投稿は行いません)。結果はスクリプトウィンドウ下部のログ出力エリアに `[OK]` (成功)・`[NG]` (失敗)・`[--]` (未設定のためスキップ)として表示されます。
+各種API情報を入力したら、配信を開始する前に動作確認を行うことをおすすめします。OBSのスクリプト設定画面の一番下にある「接続テスト」ボタンをクリックすると、Twitch・Discord・Blueskyのうち設定済みのサービスについてのみ接続確認を行います(実際の投稿は行いません)。結果はスクリプトウィンドウ下部のログ出力エリアに `[OK]` (成功)・`[NG]` (失敗)・`[--]` (未設定のためスキップ)として表示されます。
 
 > [!TIP]
 > スクリプト設定画面の上部にある「デバッグログを有効にする」にチェックを入れると、配信情報の取得やSNS通知送信の詳細な処理状況がログ出力エリアに表示されるようになります。うまく動作しない場合の原因調査に役立ちます。
