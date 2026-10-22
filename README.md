@@ -4,10 +4,10 @@ OBS Studioで配信を開始した際に、Bluesky、Discordへ自動的に開�
 
 ## セットアップ
 
-### ① Python 3.10.11のインストール (Windows 64bit版)
+### ① Python 3.12のインストール (Windows 64bit版)
 
-1. [Python公式サイト](https://www.python.org/downloads/windows/) から「Python 3.10.11 Windows installer (64-bit)」をダウンロードし、実行します。
-2. インストーラーの最初の画面で、**「Add Python 3.10 to PATH」に必ずチェックを入れてください。** コマンドプロンプトからPythonを実行できるようになります。
+1. [Python公式サイト](https://www.python.org/downloads/windows/) から「Python 3.12.10 Windows installer (64-bit)」をダウンロードし、実行します。
+2. インストーラーの最初の画面で、**「Add Python 3.12 to PATH」に必ずチェックを入れてください。** コマンドプロンプトからPythonを実行できるようになります。
 3. 「Install Now」をクリックし、インストールを完了させます。
 4. インストール後、コマンドプロンプトで以下を実行し、正しくインストールされたか確認します。
 
@@ -15,7 +15,7 @@ OBS Studioで配信を開始した際に、Bluesky、Discordへ自動的に開�
    python --version
    ```
 
-   バージョンが「Python 3.10.11」と表示されれば成功です。
+   バージョンが「Python 3.12.10」と表示されれば成功です。
 
 ### ② 必要なPythonライブラリのインストール
 
@@ -25,10 +25,10 @@ OBS Studioで配信を開始した際に、Bluesky、Discordへ自動的に開�
 
 1. OBS Studioを開きます。
 2. メニューバーから「ツール」→「スクリプト」を選択します。
-3. スクリプトウィンドウ下部にある「Python Path」の欄に、Python 3.10.11がインストールされているフォルダのパスを入力します。通常は以下のパスです。
+3. スクリプトウィンドウ下部にある「Python Path」の欄に、Python 3.12.10がインストールされているフォルダのパスを入力します。通常は以下のパスです。
 
    ```
-   %USERPROFILE%\AppData\Local\Programs\Python\Python310
+   %USERPROFILE%\AppData\Local\Programs\Python\Python312
    ```
 
    このパスは、エクスプローラーのアドレスバーに直接入力して開くことができます。
